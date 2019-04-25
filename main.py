@@ -102,6 +102,13 @@ def getFastEquation(radiusFast, radiusDeferent, handlerAngleSin, kappa):
    
     return sigma
 
+def getSlowEquation(radiusSlow, radiusDeferent, handlerAngleSin, kappa):
+    
+    sinKappa = handlerAngleSin.sinOf(kappa)
+
+    mu = handlerAngleSin.arcsinOf(radiusSlow * sinKappa / radiusDeferent)
+
+    return mu
 ##########
 
 # setup the Sin tables
@@ -151,6 +158,69 @@ print('sizeFast: ' + str(sizeFast))
 radiusFast = sizeFast / 360. * radiusDeferent
 print('radiusFast: ' + str(radiusFast))
 
-
-sigma_1 = getFastEquation(radiusFast, radiusDeferent,handler, kappa_sigma_1)
+sigma_1 = getFastEquation(radiusFast, radiusDeferent, handler, kappa_sigma_1)
 print('sigma_1: ' + str(sigma_1))
+
+# plus or minus ?? took minus for now
+lambda_1 = lambda_bar - 0.5 * sigma_1
+print('lambda_1: ' + str(lambda_1))
+
+# 2nd step
+# apply half the slow equation to the computed result
+lambda_mu = longitude_slow_apogee
+print('lambda_mu: ' + str(lambda_mu))
+kappa_mu_1 = lambda_1 - lambda_mu
+print('kappa_mu_1: ' + str(kappa_mu_1))
+
+# get the current size of the epicycle
+sizeSlow = getSizeEpicycle(sizeSlow_at_0, sizeSlow_at_90, radiusDeferent, handler, kappa_mu_1)
+print('sizeSlow: ' + str(sizeSlow))
+# convert the size to the radius
+radiusSlow = sizeSlow / 360. * radiusDeferent
+print('radiusSlow: ' + str(radiusSlow))
+
+mu_1 = getSlowEquation(radiusSlow, radiusDeferent, handler, kappa_mu_1)
+print('mu_1: ' + str(mu_1))
+
+# plus or minus ?? took plus for now
+lambda_2 = lambda_1 + 0.5 * mu_1
+print('lambda_2: ' + str(lambda_2))
+
+# 3rd step
+# start form the computed result, compute the slow equation,
+# apply it whole to the mean planet
+kappa_mu_2 = lambda_2 - lambda_mu
+print('kappa_mu_2: ' + str(kappa_mu_2))
+
+# get the current size of the epicycle
+sizeSlow = getSizeEpicycle(sizeSlow_at_0, sizeSlow_at_90, radiusDeferent, handler, kappa_mu_2)
+print('sizeSlow: ' + str(sizeSlow))
+# convert the size to the radius
+radiusSlow = sizeSlow / 360. * radiusDeferent
+print('radiusSlow: ' + str(radiusSlow))
+
+mu_2 = getSlowEquation(radiusSlow, radiusDeferent, handler, kappa_mu_2)
+print('mu_2: ' + str(mu_2))
+
+# plus or minus ?? took plus for now
+lambda_3 = lambda_bar + mu_2
+print('lambda_3: ' + str(lambda_3))
+
+# 4th step
+# apply the whole fast equation to the computed result
+kappa_sigma_2 = lambda_3 - lambda_sigma
+print('kappa_sigma_2: ' + str(kappa_sigma_2))
+
+# get the current size of the epicycle
+sizeFast = getSizeEpicycle(sizeFast_at_0, sizeFast_at_90, radiusDeferent, handler, kappa_sigma_2)
+print('sizeFast: ' + str(sizeFast))
+# convert the size to the radius
+radiusFast = sizeFast / 360. * radiusDeferent
+print('radiusFast: ' + str(radiusFast))
+
+sigma_2 = getFastEquation(radiusSlow, radiusDeferent, handler, kappa_sigma_2)
+print('sigma_2: ' + str(sigma_2))
+
+# plus or minus ?? took minus for now
+lambda_true = lambda_3 - sigma_2
+print('lambda_true: ' + str(lambda_true))
