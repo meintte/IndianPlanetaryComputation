@@ -4,6 +4,61 @@ from scipy.interpolate import interp1d
 import numpy as np
 from math import sqrt
 
+class AngleAndSignHandler:
+    def __init__(self, thetas, sinValues):
+        self.InterpolatedSinTable = interp1d(thetas, sinValues)
+        self.InterpolatedInverseSinTable = interp1d(sinValues, thetas)
+
+    # return exmple: 270.5 -> 270 deg & 30 min
+    def DecimalDegreeToIndividualAngleUnits(self, decimalDeg):
+        degrees = int(decimalDeg)
+        minutes = (decimalDeg - degrees) * 60
+        seconds = (minutes - int(minutes)) * 60
+
+        return degrees, int(minutes), int(seconds)
+
+    # returns the decimal degrees
+    def IndividualAngleUnitsToDecimalDegree(self, degrees, minutes, seconds=0):
+        tmpMinutes = minutes + seconds / 60.
+
+        return degrees + tmpMinutes / 360.
+
+    def getPositveAngle(self, decimalAngle):
+        while decimalAngle < 0:
+            decimalAngle += 360
+        return decimalAngle
+
+    # positivity is required
+    def _getQuadrantOfAngle(self, decimalAngle):
+        # the qudrants are 0, 1, 2, 3
+        if (decimalAngle <= 90):
+            return 0
+        elif (decimalAngle <= 180):
+            return 1
+        elif (decimalAngle <= 270):
+            return 2
+        else:
+            return 3
+
+    def sinOf(self, decimalAngle):
+        angleForSin = self.getPositveAngle(decimalAngle)
+        quadrant = self._getQuadrantOfAngle(angleForSin)
+        if (quadrant <= 1):
+            sign = 1
+        else:
+            sign = -1
+
+        angleForSin = angleForSin - quadrant*90
+
+        return sign * self.InterpolatedSinTable(angleForSin)
+
+    def arcsinOf(self, sinValue):
+        if (sinValue < 0):
+            return -1 * self.InterpolatedInverseSinTable(-sinValue)
+        else:
+            return self.InterpolatedInverseSinTable(sinValue)
+
+
 # returns the Radius and the known theta Sin pairs (each as separate np.array)
 def readCsvFile(filename):
 
@@ -23,34 +78,37 @@ def readCsvFile(filename):
        
     return R, thetas, sinValues
 
-# return exmple: 270.5 -> 270 deg & 30 min
-def DecimalDegreeToIndividualAngleUnits(decimalDeg):
-    degrees = int(decimalDeg)
-    minutes = (decimalDeg - degrees) * 60
-    seconds = (minutes - int(minutes)) * 60
-
-    return degrees, minutes, seconds
-
-# returns the decimal degrees
-def IndividualAngleUnitsToDecimalDegree(degrees, minutes, seconds=0):
-    tmpMinutes = minutes + seconds / 60.
-
-    return degrees + tmpMinutes / 360.
-
-def getSizeEpicycle(size_at_0, size_at_90, sinTable, r_for_sin, decimalAngle):
-    return size_at_0 + (size_at_90 - size_at_0) * sinTable(decimalAngle) / r_for_sin
+def getSizeEpicycle(size_at_0, size_at_90, r_for_sin, handlerAngleSin, decimalAngle):
+    return size_at_0 + (size_at_90 - size_at_0) * handlerAngleSin.sinOf(decimalAngle) / r_for_sin
 
 def getDecimalAngleFromRotation(revolutionSpeed, elapsedDays, period):
     numRevolutions = (revolutionSpeed * elapsedDays) / (1. * period)
     return (numRevolutions - int(numRevolutions)) * 360
 
+def getFastEquation(radiusFast, radiusDeferent, handlerAngleSin, kappa):
+    
+    sinKappa = handlerAngleSin.sinOf(kappa)
+
+    print('VMA: ' + str(sinKappa))
+    print('OVM: ' + str(radiusDeferent))
+    print('VMV: ' + str(radiusFast))
+
+    VB = (radiusFast * sinKappa) / radiusDeferent
+    print('VB: ' + str(VB))
+    radialDistance = sqrt(VB**2 + (radiusDeferent + sqrt(sinKappa**2 - VB**2))**2)
+    print('radialDistance: ' + str(radialDistance))
+
+    sigma = handlerAngleSin.arcsinOf(radiusFast * sinKappa / radialDistance)
+   
+    return sigma
+
 ##########
 
 # setup the Sin tables
+# it's assumed that the sin table only gives vales for angles in [0,90 deg]
 radiusDeferent, thetas, sinValues = readCsvFile('SinTables/AryabhatiyaSinTable.csv')
 
-InterpolatedSinTable = interp1d(thetas, sinValues)
-InterpolatedInverseSinTable = interp1d(sinValues, thetas)
+handler = AngleAndSignHandler(thetas, sinValues)
 
 yuga = 4320000
 days_in_yuga = 1577917828
@@ -62,7 +120,7 @@ days_since_epoch = 1870110 # CHANGE for other dates
 meanPlanet_revolutions = 364220
 fast_apogee_revolutions = 4320000
 
-longitude_slow_apogee = IndividualAngleUnitsToDecimalDegree(171, 18)
+longitude_slow_apogee = handler.IndividualAngleUnitsToDecimalDegree(171, 18)
 
 # size is the circumference, when the deferent has a circumference of 360
 # the epicycle has also the sames sizes as the deg + 180
@@ -71,7 +129,7 @@ sizeSlow_at_90 = 32
 sizeFast_at_0 = 70
 sizeFast_at_90 = 72
 
-# 4 step procedure, from surysiddhanta
+# 4 step procedure, from suryasiddhanta
 
 # 0th step
 # calculate the mean planets longitude (lambda_bar)
@@ -84,37 +142,15 @@ lambda_sigma = getDecimalAngleFromRotation(fast_apogee_revolutions, days_since_e
 print('lambda_sigma: ' + str(lambda_sigma))
 kappa_sigma_1 = lambda_bar - lambda_sigma
 
-# constrain kappa, so it's usefull for the sintable
-kappaSign = 1.
-
-if(kappa_sigma_1 < 0):
-    kappa_sigma_1 += 360
-
-if(kappa_sigma_1 > 180):
-    kappaSign = -1
-    kappa_sigma_1 -= 180
-
-if(kappa_sigma_1 > 90):
-    kappa_sigma_1 -= 90
-
 print('kappa_sigma_1: ' + str(kappa_sigma_1))
 
-sizeFast = getSizeEpicycle(sizeFast_at_0, sizeFast_at_90, InterpolatedSinTable, radiusDeferent, kappa_sigma_1)
+# get the current size of the epicycle
+sizeFast = getSizeEpicycle(sizeFast_at_0, sizeFast_at_90, radiusDeferent, handler, kappa_sigma_1)
 print('sizeFast: ' + str(sizeFast))
+# convert the size to the radius
 radiusFast = sizeFast / 360. * radiusDeferent
 print('radiusFast: ' + str(radiusFast))
 
-# pretty sure till here it's okay, but check beneath
 
-VMA = kappaSign * InterpolatedSinTable(kappa_sigma_1)
-print('VMA: ' + str(VMA))
-print('OVM: ' + str(radiusDeferent))
-print('VMV: ' + str(radiusFast))
-
-VB = (radiusDeferent * VMA) / radiusFast
-print('VB: ' + str(VB))
-VB2 = VB * VB
-inner = radiusDeferent + sqrt(radiusFast**2 - VB**2)
-print('VB2: ' + str(VB2))
-print('inner2: ' + str(inner * inner))
-radialDistance = sqrt(VB2 + inner * inner)
+sigma_1 = getFastEquation(radiusFast, radiusDeferent,handler, kappa_sigma_1)
+print('sigma_1: ' + str(sigma_1))
