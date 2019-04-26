@@ -109,6 +109,7 @@ def getSlowEquation(radiusSlow, radiusDeferent, handlerAngleSin, kappa):
     mu = handlerAngleSin.arcsinOf(radiusSlow * sinKappa / radiusDeferent)
 
     return mu
+
 ##########
 
 # setup the Sin tables
@@ -135,6 +136,8 @@ sizeSlow_at_0 = 33
 sizeSlow_at_90 = 32
 sizeFast_at_0 = 70
 sizeFast_at_90 = 72
+
+### END OF PARAMETER DECLARATION
 
 # 4 step procedure, from suryasiddhanta
 
@@ -218,7 +221,7 @@ print('sizeFast: ' + str(sizeFast))
 radiusFast = sizeFast / 360. * radiusDeferent
 print('radiusFast: ' + str(radiusFast))
 
-sigma_2 = getFastEquation(radiusSlow, radiusDeferent, handler, kappa_sigma_2)
+sigma_2 = getFastEquation(radiusFast, radiusDeferent, handler, kappa_sigma_2)
 print('sigma_2: ' + str(sigma_2))
 
 # plus or minus ?? took minus for now
