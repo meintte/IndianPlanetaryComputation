@@ -4,7 +4,7 @@ from scipy.interpolate import interp1d
 import numpy as np
 from math import sqrt
 
-class AngleAndSignHandler:
+class AngleAndSinHandler:
     def __init__(self, thetas, sinValues):
         self.InterpolatedSinTable = interp1d(thetas, sinValues)
         self.InterpolatedInverseSinTable = interp1d(sinValues, thetas)
@@ -79,7 +79,7 @@ def readCsvFile(filename):
     return R, thetas, sinValues
 
 def getSizeEpicycle(size_at_0, size_at_90, r_for_sin, handlerAngleSin, decimalAngle):
-    return size_at_0 + (size_at_90 - size_at_0) * handlerAngleSin.sinOf(decimalAngle) / r_for_sin
+    return size_at_0 + (size_at_90 - size_at_0) * abs(handlerAngleSin.sinOf(decimalAngle)) / r_for_sin
 
 def getDecimalAngleFromRotation(revolutionSpeed, elapsedDays, period):
     numRevolutions = (revolutionSpeed * elapsedDays) / (1. * period)
@@ -116,7 +116,7 @@ def getSlowEquation(radiusSlow, radiusDeferent, handlerAngleSin, kappa):
 # it's assumed that the sin table only gives vales for angles in [0,90 deg]
 radiusDeferent, thetas, sinValues = readCsvFile('SinTables/AryabhatiyaSinTable.csv')
 
-handler = AngleAndSignHandler(thetas, sinValues)
+handler = AngleAndSinHandler(thetas, sinValues)
 
 yuga = 4320000
 days_in_yuga = 1577917828
@@ -146,12 +146,14 @@ sizeFast_at_90 = 72
 lambda_bar = getDecimalAngleFromRotation(meanPlanet_revolutions, days_since_epoch, days_in_yuga)
 print('lambda_bar: ' + str(lambda_bar))
 
-# 1st step
+################# START 1st step #################
 # apply half the fast equation to the mean planet
 lambda_sigma = getDecimalAngleFromRotation(fast_apogee_revolutions, days_since_epoch, days_in_yuga)
 print('lambda_sigma: ' + str(lambda_sigma))
-kappa_sigma_1 = lambda_bar - lambda_sigma
 
+kappa_sigma_1 = lambda_bar - lambda_sigma
+print('kappa_sigma_1: ' + str(kappa_sigma_1))
+kappa_sigma_1 = handler.getPositveAngle(kappa_sigma_1)
 print('kappa_sigma_1: ' + str(kappa_sigma_1))
 
 # get the current size of the epicycle
@@ -163,16 +165,23 @@ print('radiusFast: ' + str(radiusFast))
 
 sigma_1 = getFastEquation(radiusFast, radiusDeferent, handler, kappa_sigma_1)
 print('sigma_1: ' + str(sigma_1))
+sigma_1 = handler.getPositveAngle(sigma_1)
+print('sigma_1: ' + str(sigma_1))
 
 # plus or minus ?? took minus for now
 lambda_1 = lambda_bar - 0.5 * sigma_1
 print('lambda_1: ' + str(lambda_1))
 
-# 2nd step
+################# END 1st step #################
+
+################# START 2nd step #################
 # apply half the slow equation to the computed result
 lambda_mu = longitude_slow_apogee
 print('lambda_mu: ' + str(lambda_mu))
+
 kappa_mu_1 = lambda_1 - lambda_mu
+print('kappa_mu_1: ' + str(kappa_mu_1))
+kappa_mu_1 = handler.getPositveAngle(kappa_mu_1)
 print('kappa_mu_1: ' + str(kappa_mu_1))
 
 # get the current size of the epicycle
@@ -184,15 +193,21 @@ print('radiusSlow: ' + str(radiusSlow))
 
 mu_1 = getSlowEquation(radiusSlow, radiusDeferent, handler, kappa_mu_1)
 print('mu_1: ' + str(mu_1))
+mu_1 = handler.getPositveAngle(mu_1)
+print('mu_1: ' + str(mu_1))
 
 # plus or minus ?? took plus for now
 lambda_2 = lambda_1 + 0.5 * mu_1
 print('lambda_2: ' + str(lambda_2))
 
-# 3rd step
+################# END 2nd step #################
+
+################# START 3rd step #################
 # start form the computed result, compute the slow equation,
 # apply it whole to the mean planet
 kappa_mu_2 = lambda_2 - lambda_mu
+print('kappa_mu_2: ' + str(kappa_mu_2))
+kappa_mu_2 = handler.getPositveAngle(kappa_mu_2)
 print('kappa_mu_2: ' + str(kappa_mu_2))
 
 # get the current size of the epicycle
@@ -204,14 +219,20 @@ print('radiusSlow: ' + str(radiusSlow))
 
 mu_2 = getSlowEquation(radiusSlow, radiusDeferent, handler, kappa_mu_2)
 print('mu_2: ' + str(mu_2))
+mu_2 = handler.getPositveAngle(mu_2)
+print('mu_2: ' + str(mu_2))
 
 # plus or minus ?? took plus for now
 lambda_3 = lambda_bar + mu_2
 print('lambda_3: ' + str(lambda_3))
 
-# 4th step
+################# END 3rd step #################
+
+################# START 4th step #################
 # apply the whole fast equation to the computed result
 kappa_sigma_2 = lambda_3 - lambda_sigma
+print('kappa_sigma_2: ' + str(kappa_sigma_2))
+kappa_sigma_2 = handler.getPositveAngle(kappa_sigma_2)
 print('kappa_sigma_2: ' + str(kappa_sigma_2))
 
 # get the current size of the epicycle
@@ -223,7 +244,13 @@ print('radiusFast: ' + str(radiusFast))
 
 sigma_2 = getFastEquation(radiusFast, radiusDeferent, handler, kappa_sigma_2)
 print('sigma_2: ' + str(sigma_2))
+sigma_2 = handler.getPositveAngle(sigma_2)
+print('sigma_2: ' + str(sigma_2))
 
 # plus or minus ?? took minus for now
 lambda_true = lambda_3 - sigma_2
 print('lambda_true: ' + str(lambda_true))
+lambda_true = handler.getPositveAngle(lambda_true)
+print('sigma_2: ' + str(lambda_true))
+
+################# END 4th step #################
