@@ -12,18 +12,19 @@ class AngleAndSinHandler:
         self.InterpolatedInverseSinTable = interp1d(sinValues, thetas)
 
     # return exmple: 270.5 -> 270 deg & 30 min
+    # bug with input 30.2666667, the int in min makes from 16.0 15...
     def DecimalDegreeToIndividualAngleUnits(self, decimalDeg):
         degrees = int(decimalDeg)
-        minutes = (decimalDeg - degrees) * 60
-        seconds = (minutes - int(minutes)) * 60
-
-        return degrees, int(minutes), seconds
+        minutes = int((decimalDeg - degrees) * 60)
+        seconds = (decimalDeg - degrees - minutes/60.)*3600
+    
+        return degrees, minutes, seconds
 
     # returns the decimal degrees
     def IndividualAngleUnitsToDecimalDegree(self, degrees, minutes, seconds=0):
         tmpMinutes = minutes + seconds / 60.
 
-        return degrees + tmpMinutes / 360.
+        return degrees + tmpMinutes / 60.
 
     def getPositveAngle(self, decimalAngle):
         while decimalAngle < 0:
@@ -34,11 +35,10 @@ class AngleAndSinHandler:
 
     def roundToMinutes(self, decimalAngle):
         _deg, _min, _sec = self.DecimalDegreeToIndividualAngleUnits(decimalAngle)
-        angle = self.IndividualAngleUnitsToDecimalDegree(_deg, _min, 0)
-        if (_sec >= 30):
-            return angle+1/60.
+        if (_sec >= 30.):
+            return self.IndividualAngleUnitsToDecimalDegree(_deg, _min+1, 0)
         else:
-            return angle
+            return self.IndividualAngleUnitsToDecimalDegree(_deg, _min, 0)
 
     # positivity is required
     def _getQuadrantOfAngle(self, decimalAngle):
@@ -70,11 +70,11 @@ class AngleAndSinHandler:
         else:
             return self.InterpolatedInverseSinTable(sinValue)
 
-    def printAngle(self, name, angle, inDecimal=True):
+    def printAngle(self, name, decimalAngle, inDecimal=True):
         if inDecimal:
-            print('{:20}: {}°'.format(name, angle))
+            print('{:20}: {}°'.format(name, decimalAngle))
         else:
-            _deg, _min, _sec = self.DecimalDegreeToIndividualAngleUnits(angle)
+            _deg, _min, _sec = self.DecimalDegreeToIndividualAngleUnits(decimalAngle)
 
             print('{:20}: {}° {}\' {}\'\''.format(name, _deg, _min, _sec))
 
