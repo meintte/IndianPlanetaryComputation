@@ -7,6 +7,26 @@ from math import sqrt
 import numpy as np
 from scipy.interpolate import interp1d
 
+import yaml
+
+
+class PlanetVariables:
+    def __init__(self, name):
+        self.name = name
+        self._getDataFromFile()
+
+    def _getDataFromFile(self):
+        with open("planetVariables/" + self.name + ".yml", 'r') as ymlfile:
+            yamlFile = yaml.load(ymlfile)
+
+        self.meanPlanet_revolutions = yamlFile['mean planet revolutions per yuga']
+        self.fast_apogee_revolutions = yamlFile['fast apogee revolutions per yuga']
+        self.longitude_slow_apogee = yamlFile['longitude slow apogee']
+        self.sizeSlow_at_0 = yamlFile['size slow epicycle at 0 & 180']
+        self.sizeSlow_at_90 = yamlFile['size slow epicycle at 90 & 270']
+        self.sizeFast_at_0 = yamlFile['size fast epicycle at 0 & 180']
+        self.sizeFast_at_90 = yamlFile['size fast epicycle at 90 & 270']
+
 
 class AngleAndSinHandler:
     def __init__(self, thetas, sinValues):
@@ -58,6 +78,7 @@ class AngleAndSinHandler:
     def sinOf(self, decimalAngle):
         angleForSin = self.getPositveAngle(decimalAngle)
         quadrant = self._getQuadrantOfAngle(angleForSin)
+        # the quadrant numberation goes from 0 to 3
         if (quadrant <= 1):
             sign = 1
         else:
@@ -276,57 +297,69 @@ def do4stepProcedure(
 #############################################################
 
 
-# setup the Sin tables
-# it's assumed that the sin table only gives vales for angles in [0,90 deg]
-radiusDeferent, thetas, sinValues = readCsvFile(
-    'SinTables/AryabhatiyaSinTable.csv')
+def allPosibilityWay(yuga, days_in_yuga, days_since_epoch, radiusDeferent, handler, planet, doRounding, printDecimalDegree):
+    for i in [-1, 1]:
+        for j in [-1, 1]:
+            for k in [-1, 1]:
+                for l in [-1, 1]:
+                    print(
+                        "####################################### " '{},{},{},{}'.format(i, j, k, l))
+                    do4stepProcedure(
+                        yuga, days_in_yuga, days_since_epoch,
+                        radiusDeferent, handler,
+                        planet.meanPlanet_revolutions, planet.fast_apogee_revolutions, planet.longitude_slow_apogee,
+                        planet.sizeSlow_at_0, planet.sizeSlow_at_90, planet.sizeFast_at_0, planet.sizeFast_at_90,
+                        doRounding, printDecimalDegree,
+                        i, j, k, l)
 
-handler = AngleAndSinHandler(thetas, sinValues)
+#############################################################
 
-# evidence suggest that angle values are rounded to the nearest minute
-doRounding = False
-# print all steps
-# printAll = False
-# print angles in decimalDegree
-printDecimalDegree = True
 
-yuga = 4320000
-days_in_yuga = 1577917828
-days_since_epoch = 1862535  # 06.07.1998 as current date
+if __name__ == "__main__":
 
-# ! ALL OF THE FOLLOWING NUMBERS ARE FOR JUPITER ! #
+    # get the global variables from the yaml file
+    with open("globalVariables.yml", 'r') as ymlfile:
+        globalVars = yaml.load(ymlfile)
 
-# revolutions are per yuga
-meanPlanet_revolutions = 364220
-fast_apogee_revolutions = 4320000
+    # setup the Sin tables
+    # it's assumed that the sin table only gives vales for angles in [0,90 deg]
+    radiusDeferent, thetas, sinValues = readCsvFile(
+        globalVars['sin table'])
 
-longitude_slow_apogee = handler.IndividualAngleUnitsToDecimalDegree(171, 18)
+    handler = AngleAndSinHandler(thetas, sinValues)
 
-# size is the circumference, when the deferent has a circumference of 360
-# the epicycle has also the sames sizes as the deg + 180
-sizeSlow_at_0 = 33
-sizeSlow_at_90 = 32
-sizeFast_at_0 = 70
-sizeFast_at_90 = 72
+    # evidence suggest that angle values are rounded to the nearest minute
+    doRounding = globalVars['round to minutes']
+    # print all steps
+    # printAll = False
+    # print angles in decimalDegree
+    printDecimalDegree = globalVars['print in decimal degrees']
 
-# END OF PARAMETER DECLARATION
+    yuga = globalVars['yuga']
+    days_in_yuga = globalVars['days in a yuga']
+    days_since_epoch = globalVars['days since the epoch']
 
-# time constants
-# deferent radius and sin handler
-# planet constants
-# epicycle radii
-# settings
-# the signs for the last calculation in each step
-for i in [-1, 1]:
-    for j in [-1, 1]:
-        for k in [-1, 1]:
-            for l in [-1, 1]:
-                print(
-                    "####################################### " '{},{},{},{}'.format(i, j, k, l))
-                do4stepProcedure(
-                    yuga, days_in_yuga, days_since_epoch,
-                    radiusDeferent, handler,
-                    meanPlanet_revolutions, fast_apogee_revolutions, longitude_slow_apogee,
-                    sizeSlow_at_0, sizeSlow_at_90, sizeFast_at_0, sizeFast_at_90,
-                    doRounding, printDecimalDegree,
-                    i, j, k, l)
+    planets = []
+
+    for planetToCalculate in globalVars['do calculations for']:
+        if planetToCalculate == 'Sun' or planetToCalculate == 'Moon':
+            print(planetToCalculate + "is not yet implemented...")
+        elif planetToCalculate == 'Mars' or planetToCalculate == 'Mercury' or planetToCalculate == 'Jupiter' or planetToCalculate == 'Venus' or planetToCalculate == 'Saturn':
+            planets.append(PlanetVariables(planetToCalculate))
+        else:
+            print("Unknown planet! Please check for typos")
+
+    for p in planets:
+
+        print(p.name)
+        print("")
+
+        do4stepProcedure(
+            yuga, days_in_yuga, days_since_epoch,
+            radiusDeferent, handler,
+            p.meanPlanet_revolutions, p.fast_apogee_revolutions, p.longitude_slow_apogee,
+            p.sizeSlow_at_0, p.sizeSlow_at_90, p.sizeFast_at_0, p.sizeFast_at_90,
+            doRounding, printDecimalDegree,
+            1, 1, 1, 1)
+
+        print("")
