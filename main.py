@@ -5,9 +5,8 @@ import csv
 from math import sqrt
 
 import numpy as np
-from scipy.interpolate import interp1d
-
 import yaml
+from scipy.interpolate import interp1d
 
 
 class PlanetVariables:
@@ -20,12 +19,15 @@ class PlanetVariables:
             yamlFile = yaml.load(ymlfile)
 
         self.meanPlanet_revolutions = yamlFile['mean planet revolutions per yuga']
-        self.fast_apogee_revolutions = yamlFile['fast apogee revolutions per yuga']
+
         self.longitude_slow_apogee = yamlFile['longitude slow apogee']
         self.sizeSlow_at_0 = yamlFile['size slow epicycle at 0 & 180']
         self.sizeSlow_at_90 = yamlFile['size slow epicycle at 90 & 270']
-        self.sizeFast_at_0 = yamlFile['size fast epicycle at 0 & 180']
-        self.sizeFast_at_90 = yamlFile['size fast epicycle at 90 & 270']
+
+        if self.name != 'Sun':
+            self.fast_apogee_revolutions = yamlFile['fast apogee revolutions per yuga']
+            self.sizeFast_at_0 = yamlFile['size fast epicycle at 0 & 180']
+            self.sizeFast_at_90 = yamlFile['size fast epicycle at 90 & 270']
 
 
 class AngleAndSinHandler:
@@ -114,8 +116,6 @@ class AngleAndSinHandler:
 
         return angle
 
-# returns the Radius and the known theta Sin pairs (each as separate np.array)
-
 
 def readCsvFile(filename):
 
@@ -137,13 +137,20 @@ def readCsvFile(filename):
 
 
 def getSizeEpicycle(size_at_0, size_at_90, r_for_sin, handlerAngleSin, decimalAngle):
-    return size_at_0 + (size_at_90 - size_at_0) * abs(handlerAngleSin.sinOf(decimalAngle)) / r_for_sin
+    return size_at_0 + (size_at_90 - size_at_0) * abs(handlerAngleSin.sinOf(decimalAngle)) / (1. * r_for_sin)
 
 
-def getRadiusEpicycle(size_at_0, size_at_90, radiusDeferent, handlerAngleSin, decimalAngle):
+def getRadiusEpicycle(size_at_0, size_at_90, radiusDeferent, handlerAngleSin, decimalAngle, printAll):
     sizeEpicycle = getSizeEpicycle(
         size_at_0, size_at_90, radiusDeferent, handlerAngleSin, decimalAngle)
-    return sizeEpicycle / 360. * radiusDeferent
+
+    radiusEpicycle = sizeEpicycle / 360. * radiusDeferent
+
+    if printAll:
+        print('{:20}: {}'.format('sizeEpicycle', sizeEpicycle))
+        print('{:20}: {}'.format('radiusEpicycle', radiusEpicycle))
+
+    return radiusEpicycle
 
 
 def getDecimalAngleFromRotation(revolutionSpeed, elapsedDays, period):
@@ -151,32 +158,75 @@ def getDecimalAngleFromRotation(revolutionSpeed, elapsedDays, period):
     return (numRevolutions - int(numRevolutions)) * 360
 
 
-def getFastEquation(radiusFast, radiusDeferent, handlerAngleSin, kappa):
+def getFastEquation(radiusFast, radiusDeferent, handlerAngleSin, kappa, printAll):
 
     sinKappa = handlerAngleSin.sinOf(kappa)
 
-    #print('VMA: \t' + str(sinKappa))
-    #print('OVM: \t' + str(radiusDeferent))
-    #print('VMV: \t' + str(radiusFast))
-
     VB = (radiusFast * sinKappa) / radiusDeferent
-    #print('VB: \t' + str(VB))
+
     radialDistance = sqrt(
         VB**2 + (radiusDeferent + sqrt(sinKappa**2 - VB**2))**2)
-    #print('radialDistance: \t' + str(radialDistance))
 
     sigma = handlerAngleSin.arcsinOf(radiusFast * sinKappa / radialDistance)
+
+    if printAll:
+        print('{:20}: {}'.format('sinKappa', sinKappa))
+        print('{:20}: {}'.format('radiusDeferent', radiusDeferent))
+        print('{:20}: {}'.format('radiusFast', radiusFast))
+        print('{:20}: {}'.format('radialDistance', radialDistance))
 
     return sigma
 
 
-def getSlowEquation(radiusSlow, radiusDeferent, handlerAngleSin, kappa):
+def getSlowEquation(radiusSlow, radiusDeferent, handlerAngleSin, kappa, printAll):
 
     sinKappa = handlerAngleSin.sinOf(kappa)
+
+    if printAll:
+        print('{:20}: {}'.format('sinKappa', sinKappa))
 
     mu = handlerAngleSin.arcsinOf(radiusSlow * sinKappa / radiusDeferent)
 
     return mu
+
+#############################################################
+
+
+def doSunProcedure(
+        _yuga, _days_in_yuga, _days_since_epoch,
+        _radiusDeferent, _handler,
+        _meanPlanet_revolutions, _longitude_slow_apogee,
+        _sizeSlow_at_0, _sizeSlow_at_90,
+        _doRounding, _printDecimalDegree, _printAll):
+
+    # mean planet calculation
+    lambda_bar = getDecimalAngleFromRotation(
+        _meanPlanet_revolutions, _days_since_epoch, _days_in_yuga)
+    lambda_bar = _handler.makePositiveRoundAndPrint(
+        'lambda_bar', lambda_bar, _printDecimalDegree, _doRounding)
+
+    # apply half the slow equation to the computed result
+    lambda_mu = _longitude_slow_apogee
+    lambda_mu = _handler.makePositiveRoundAndPrint(
+        'lambda_mu', lambda_mu, _printDecimalDegree, _doRounding)
+
+    kappa_mu = lambda_bar - lambda_mu
+    kappa_mu = _handler.makePositiveRoundAndPrint(
+        'kappa_mu', kappa_mu, _printDecimalDegree, _doRounding)
+
+    # get the current radius of the epicycle
+    radiusSlow = getRadiusEpicycle(
+        _sizeSlow_at_0, _sizeSlow_at_90, _radiusDeferent, _handler, kappa_mu, _printAll)
+
+    mu = getSlowEquation(radiusSlow, _radiusDeferent,
+                         _handler, kappa_mu, _printAll)
+    mu = _handler.makePositiveRoundAndPrint(
+        'mu', mu, _printDecimalDegree, _doRounding)
+
+    # plus or minus? use the secondSign...
+    lambda_true = lambda_bar + mu
+    lambda_true = _handler.makePositiveRoundAndPrint(
+        'lambda_true', lambda_true, _printDecimalDegree, _doRounding)
 
 #############################################################
 
@@ -186,7 +236,7 @@ def do4stepProcedure(
         _radiusDeferent, _handler,
         _meanPlanet_revolutions, _fast_apogee_revolutions, _longitude_slow_apogee,
         _sizeSlow_at_0, _sizeSlow_at_90, _sizeFast_at_0, _sizeFast_at_90,
-        _doRounding, _printDecimalDegree,
+        _doRounding, _printDecimalDegree, _printAll,
         _firstSign, _secondSign, _thirdSign, _fourthSign):
 
     # 4 step procedure, from suryasiddhanta
@@ -211,10 +261,10 @@ def do4stepProcedure(
 
     # get the current radius of the epicycle
     radiusFast = getRadiusEpicycle(
-        _sizeFast_at_0, _sizeFast_at_90, _radiusDeferent, _handler, kappa_sigma_1)
+        _sizeFast_at_0, _sizeFast_at_90, _radiusDeferent, _handler, kappa_sigma_1, _printAll)
 
     sigma_1 = getFastEquation(
-        radiusFast, _radiusDeferent, _handler, kappa_sigma_1)
+        radiusFast, _radiusDeferent, _handler, kappa_sigma_1, _printAll)
     sigma_1 = _handler.makePositiveRoundAndPrint(
         'sigma_1', sigma_1, _printDecimalDegree, _doRounding)
 
@@ -237,9 +287,10 @@ def do4stepProcedure(
 
     # get the current radius of the epicycle
     radiusSlow = getRadiusEpicycle(
-        _sizeSlow_at_0, _sizeSlow_at_90, _radiusDeferent, _handler, kappa_mu_1)
+        _sizeSlow_at_0, _sizeSlow_at_90, _radiusDeferent, _handler, kappa_mu_1, _printAll)
 
-    mu_1 = getSlowEquation(radiusSlow, _radiusDeferent, _handler, kappa_mu_1)
+    mu_1 = getSlowEquation(radiusSlow, _radiusDeferent,
+                           _handler, kappa_mu_1, _printAll)
     mu_1 = _handler.makePositiveRoundAndPrint(
         'mu_1', mu_1, _printDecimalDegree, _doRounding)
 
@@ -259,9 +310,10 @@ def do4stepProcedure(
 
     # get the current radius of the epicycle
     radiusSlow = getRadiusEpicycle(
-        _sizeSlow_at_0, _sizeSlow_at_90, _radiusDeferent, _handler, kappa_mu_2)
+        _sizeSlow_at_0, _sizeSlow_at_90, _radiusDeferent, _handler, kappa_mu_2, _printAll)
 
-    mu_2 = getSlowEquation(radiusSlow, _radiusDeferent, _handler, kappa_mu_2)
+    mu_2 = getSlowEquation(radiusSlow, _radiusDeferent,
+                           _handler, kappa_mu_2, _printAll)
     mu_2 = _handler.makePositiveRoundAndPrint(
         'mu_2', mu_2, _printDecimalDegree, _doRounding)
 
@@ -280,10 +332,10 @@ def do4stepProcedure(
 
     # get the current size of the epicycle
     radiusFast = getRadiusEpicycle(
-        _sizeFast_at_0, _sizeFast_at_90, _radiusDeferent, _handler, kappa_sigma_2)
+        _sizeFast_at_0, _sizeFast_at_90, _radiusDeferent, _handler, kappa_sigma_2, _printAll)
 
     sigma_2 = getFastEquation(
-        radiusFast, _radiusDeferent, _handler, kappa_sigma_2)
+        radiusFast, _radiusDeferent, _handler, kappa_sigma_2, _printAll)
     sigma_2 = _handler.makePositiveRoundAndPrint(
         'sigma_2', sigma_2, _printDecimalDegree, _doRounding)
 
@@ -297,7 +349,7 @@ def do4stepProcedure(
 #############################################################
 
 
-def allPosibilityWay(yuga, days_in_yuga, days_since_epoch, radiusDeferent, handler, planet, doRounding, printDecimalDegree):
+def allPosibilityWay(yuga, days_in_yuga, days_since_epoch, radiusDeferent, handler, planet, doRounding, printDecimalDegree, printAll):
     for i in [-1, 1]:
         for j in [-1, 1]:
             for k in [-1, 1]:
@@ -309,7 +361,7 @@ def allPosibilityWay(yuga, days_in_yuga, days_since_epoch, radiusDeferent, handl
                         radiusDeferent, handler,
                         planet.meanPlanet_revolutions, planet.fast_apogee_revolutions, planet.longitude_slow_apogee,
                         planet.sizeSlow_at_0, planet.sizeSlow_at_90, planet.sizeFast_at_0, planet.sizeFast_at_90,
-                        doRounding, printDecimalDegree,
+                        doRounding, printDecimalDegree, printAll,
                         i, j, k, l)
 
 #############################################################
@@ -330,10 +382,12 @@ if __name__ == "__main__":
 
     # evidence suggest that angle values are rounded to the nearest minute
     doRounding = globalVars['round to minutes']
-    # print all steps
-    # printAll = False
+
     # print angles in decimalDegree
     printDecimalDegree = globalVars['print in decimal degrees']
+
+    # print all steps
+    printAll = globalVars['print all steps']
 
     yuga = globalVars['yuga']
     days_in_yuga = globalVars['days in a yuga']
@@ -342,7 +396,9 @@ if __name__ == "__main__":
     planets = []
 
     for planetToCalculate in globalVars['do calculations for']:
-        if planetToCalculate == 'Sun' or planetToCalculate == 'Moon':
+        if planetToCalculate == 'Sun':
+            planets.append(PlanetVariables(planetToCalculate))
+        elif planetToCalculate == 'Moon':
             print(planetToCalculate + "is not yet implemented...")
         elif planetToCalculate == 'Mars' or planetToCalculate == 'Mercury' or planetToCalculate == 'Jupiter' or planetToCalculate == 'Venus' or planetToCalculate == 'Saturn':
             planets.append(PlanetVariables(planetToCalculate))
@@ -354,12 +410,20 @@ if __name__ == "__main__":
         print(p.name)
         print("")
 
-        do4stepProcedure(
-            yuga, days_in_yuga, days_since_epoch,
-            radiusDeferent, handler,
-            p.meanPlanet_revolutions, p.fast_apogee_revolutions, p.longitude_slow_apogee,
-            p.sizeSlow_at_0, p.sizeSlow_at_90, p.sizeFast_at_0, p.sizeFast_at_90,
-            doRounding, printDecimalDegree,
-            1, 1, 1, 1)
+        if(p.name == 'Sun'):
+            doSunProcedure(
+                yuga, days_in_yuga, days_since_epoch,
+                radiusDeferent, handler,
+                p.meanPlanet_revolutions, p.longitude_slow_apogee,
+                p.sizeSlow_at_0, p.sizeSlow_at_90,
+                doRounding, printDecimalDegree, printAll)
+        else:
+            do4stepProcedure(
+                yuga, days_in_yuga, days_since_epoch,
+                radiusDeferent, handler,
+                p.meanPlanet_revolutions, p.fast_apogee_revolutions, p.longitude_slow_apogee,
+                p.sizeSlow_at_0, p.sizeSlow_at_90, p.sizeFast_at_0, p.sizeFast_at_90,
+                doRounding, printDecimalDegree, printAll,
+                -1, 1, 1, -1)
 
         print("")
