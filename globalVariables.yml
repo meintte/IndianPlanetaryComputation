@@ -1,12 +1,13 @@
 sin table:                  "SinTables/AryabhatiyaSinTable.csv"
 round to minutes:           False
 print in decimal degrees:   True
-print all steps:            False
+print all steps:            True
 yuga:                       4320000
 days in a yuga:             1577917828
 days since the epoch:       1862535
 do calculations for:
     - Sun
+    - Moon
     - Mars
     - Mercury
     - Jupiter
